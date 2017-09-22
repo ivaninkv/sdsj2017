@@ -106,8 +106,8 @@ rm(group.train, group.test)
 ```{r}
 for.resample <- train.data %>% filter(paragraph_id > max(test.data$paragraph_id))
 train.data %<>% filter(paragraph_id <= max(test.data$paragraph_id))
-#train.data %<>% rbind(train.data, train.data)
-train.data %<>% rbind(train.data, train.data %>% filter(target == 1))
+train.data %<>% rbind(train.data, train.data)
+#train.data %<>% rbind(train.data, train.data %>% filter(target == 1))
 ```
 
 Баланс классов после удаления неиспользуемых параграфов `r mean(train.data$target)`.
@@ -161,14 +161,14 @@ text_modify(train.data$paragraph[1], sw) # обработка и удалени�
 text_modify(train.data$paragraph[1], sw, T) # обработка, удаление стоп слов и стемминг
 
 # отмодифим текстовые данные с полной обработкой
-train.data$paragraph %<>% text_modify(sw, T)
-train.data$question %<>% text_modify(sw, T)
-test.data$paragraph %<>% text_modify(sw, T)
-test.data$question %<>% text_modify(sw, T)
+train.data$paragraph %<>% text_modify(T)
+train.data$question %<>% text_modify(T)
+test.data$paragraph %<>% text_modify(T)
+test.data$question %<>% text_modify(T)
 ```
 
-Запишем данные для обработки их в Python:
 ```{r, eval=FALSE, include=FALSE}
+# Запишем данные для обработки их в Python:
 readr::write_csv(train.data, 'data/train_task1.csv')
 readr::write_csv(test.data, 'data/test_task1.csv')
 ```
@@ -350,7 +350,7 @@ rm(v, dtm.paragraph, dtm.question, it, it.paragraph, it.question, sw, sw.url, te
 gc()
 ```
 
-```{r, eval=FALSE, include=FALSE}
+```{r, eval=TRUE, include=FALSE}
 readr::write_rds(train.data, 'data/train.rds')
 readr::write_rds(test.data, 'data/test.rds')
 ```
@@ -411,7 +411,7 @@ param <- list(
   subsample = 1,
   min_child_weight = 1,
   gamma = 0,
-  #scale_pos_weight = 2.5,
+  scale_pos_weight = 2.5,
   tree_method = 'auto',
   eval_metric = 'auc',
   objective = 'binary:logistic'
@@ -453,7 +453,7 @@ param <- list(learning_rate = 0.2/k,
               feature_fraction = 1, 
               bagging_fraction = 1, 
               bagging_freq = 6, 
-              #scale_pos_weight = 2.5, 
+              scale_pos_weight = 2.5, 
               metric = 'auc',
               objective = 'binary')
 ```
