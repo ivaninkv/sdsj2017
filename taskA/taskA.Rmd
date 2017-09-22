@@ -1,0 +1,491 @@
+---
+title: "SDSJ 2017 taskA"
+author: "Konstantin Ivanin"
+date: "16 сентября 2017 г"
+output:
+  html_document: default
+  pdf_document: default
+header-includes: \usepackage[T2A]{fontenc} \usepackage[utf8]{inputenc} \usepackage[russian]{babel}
+---
+
+
+### Задача А: определение релевантности вопроса
+В данной задаче участникам необходимо построить алгоритм, определяющий релевантность поставленных вопросов к параграфу текста. Для решения этой задачи требуется не только понимать, относится ли вопрос к параграфу, но и насколько корректно он поставлен.
+
+Это задача бинарной классификации, в которой целевая переменная `target` принимает два значения: 0 и 1. Классу 1 соответствуют релевантные вопросы, заданные к параграфу человеком. К классу 0 относятся вопросы, либо заданные человеком к другим параграфам, либо были составлены компьютером. В качестве целевой метрики используется `ROC-AUC`.
+
+Для решения задачи А участникам дается два файла:
+
+1. Тренировочные 119 399 пар вопросов и параграфов `train_taskA.csv`, имеющие вид: `paragraph_id`, `question_id`, `paragraph`, `question`, `target`.
+2. Тестовые 74 295 пар вопросов и параграфов `test_taskA.csv`, имеющие вид: `paragraph_id`, `question_id`, `paragraph`, `question`.
+
+В предоставленных тренировочных и тестовых данных релевантные вопросы класса 1 были случайно выбраны из собранных вопросов и ответов. Нерелевантные примеры класса 0, составленные человеком, были получены случайным выбором вопроса к другому параграфу по той же теме. Нерелевантные вопросы класса 0, заданные компьютером, в тренировочных данных отсутствуют. Участникам необходимо самим генерировать такие вопросы для достижения лучшего качества. Также, несмотря на то, что целевая переменная target принимает два значения 0 и 1, в качестве предсказаний можно отправлять вещественные числа.
+
+Решением задачи является `.csv` файл на основе `test_taskA.csv`, с заполненным полем `target`. Файл с решением задачи должен иметь следующий вид: `paragraph_id`, `question_id`, `target`.
+
+[Пример решения на Python](http://nbviewer.jupyter.org/github/sberbank-ai/data-science-journey-2017/blob/master/taskA/baseline.ipynb "Ссылка на nbviewer")
+
+[Описание метрики ROC-AUC](http://www.machinelearning.ru/wiki/index.php?title=ROC-%D0%BA%D1%80%D0%B8%D0%B2%D0%B0%D1%8F "www.machinelearning.ru")
+
+[Материалы соревнования](https://github.com/sberbank-ai/data-science-journey-2017 "GitHub")
+
+
+#### EDA
+Загрузим необходимые бибилиотеки:
+```{r, message=FALSE}
+library(dstools)
+library(data.table)
+library(tidyverse)
+library(magrittr)
+library(stringr)
+library(tm)
+library(text2vec)
+library(xgboost)
+library(lightgbm)
+```
+
+Считаем данные:
+```{r, message=FALSE}
+train.data <- readr::read_csv('data/train_task1_latest.csv')
+test.data <- readr::read_csv('data/test_task1_latest.csv')
+sample.submsission <- readr::read_csv('data/sample_submission_a.csv')
+```
+
+Данные, предобработанные в Python:
+```{r, eval=FALSE, include=FALSE}
+train.data <- readr::read_csv('data/train.csv')
+test.data <- readr::read_csv('data/test.csv')
+```
+
+Взглянем на данные, чтобы проверить как они загрузились:
+```{r}
+glimpse(train.data)
+glimpse(test.data)
+glimpse(sample.submsission)
+```
+
+Баланс классов `r mean(train.data$target)`.
+
+Посмотрим на распределение количества вопросов в трейне и тесте по параграфам:
+```{r}
+group.train <- train.data %>% 
+  group_by(paragraph_id)
+group.test <- test.data %>% 
+  group_by(paragraph_id)
+
+ggplot() +
+  geom_density(data = group.train, mapping = aes(paragraph_id, fill = 'train'), alpha = 1/2) +
+  geom_density(data = group.test, mapping = aes(paragraph_id, fill = 'test'), alpha = 1/2) +
+  scale_fill_manual(values = c('train' = 'blue', 'test' = 'red'), name = 'Densities')
+```
+
+Как видим, id параграфов пересекаются в трейне и в тесте. В дальнейшем можно будет попробовать либо использовать как категориальную фичу, либо учить модель только на пересекающихся парграфах.
+
+Добавим столбцы с длиной вопроса и параграфа и посмотрим, как их отношение влияет на `target`:
+```{r}
+train.data %<>%
+  mutate(par_len = nchar(paragraph), 
+         ques_len = nchar(question),
+         len_ratio = ques_len / par_len)
+test.data %<>%
+  mutate(par_len = nchar(paragraph), 
+         ques_len = nchar(question),
+         len_ratio = ques_len / par_len)
+train.data %>% 
+  group_by(target) %>% 
+  summarise(mean_ratio = mean(len_ratio))
+```
+
+```{r, message=FALSE, warning=FALSE, include=FALSE}
+rm(group.train, group.test)
+```
+
+
+#### Text
+Оставим в трейне только те параграфы, что есть в тесте:
+```{r}
+for.resample <- train.data %>% filter(paragraph_id > max(test.data$paragraph_id))
+train.data %<>% filter(paragraph_id <= max(test.data$paragraph_id))
+#train.data %<>% rbind(train.data, train.data)
+train.data %<>% rbind(train.data, train.data %>% filter(target == 1))
+```
+
+Баланс классов после удаления неиспользуемых параграфов `r mean(train.data$target)`.
+
+Обрабатываем текст. Удаляем стоп-слова и цифры, приводим к нижнему регистру, делаем стемминг:
+```{r, cache=TRUE}
+text_modify <- function(txt_, sw_ = c(), stem_ = FALSE) {
+  if (length(sw_) > 0) {
+    txt_ %<>% removeWords(sw_)
+  }
+  
+  txt_ %<>% str_to_lower() %>% 
+    str_replace_all('ё', 'е') %>%
+    str_replace_all('-', ' ') %>% 
+    str_replace_all('\\(', ' ( ') %>% 
+    str_replace_all('\\)', ' ) ') %>% 
+    str_replace_all('[:digit:]', ' ') %>% 
+    str_replace_all("[^[:alpha:]]", " ") %>% 
+    removePunctuation() %>% 
+    str_replace_all("\\s+", ' ')
+  
+  if (stem_ == TRUE) {
+    # позже разобраться с кодировкой
+    # txt_ %<>%  enc2utf8() %>% 
+    #   system(command = 'mystem/mystem.exe -cl',
+    #          intern = TRUE,
+    #          ignore.stdout = FALSE,
+    #          ignore.stderr = FALSE,
+    #          wait = TRUE,
+    #          input = .,
+    #          show.output.on.console = TRUE,
+    #          minimized = FALSE,
+    #          invisible = TRUE) %>% 
+    #   str_replace_all('[{}]', '') %>%
+    #   str_replace_all('(\\|[^ ]+)', '') %>%
+    #   str_replace_all('\\?', '') %>%
+    #   str_replace_all('\\s+', ' ')
+    txt_ %<>%
+      stemDocument('russian')
+  }
+  
+  return(txt_)
+}
+
+sw.url <- 'https://raw.githubusercontent.com/stopwords-iso/stopwords-ru/master/stopwords-ru.txt'
+sw <- readr::read_csv(sw.url, col_names = F)$X1
+
+train.data$paragraph[1] # оригинал
+text_modify(train.data$paragraph[1]) # обработка
+text_modify(train.data$paragraph[1], sw) # обработка и удаление стоп слов
+text_modify(train.data$paragraph[1], sw, T) # обработка, удаление стоп слов и стемминг
+
+# отмодифим текстовые данные с полной обработкой
+train.data$paragraph %<>% text_modify(sw, T)
+train.data$question %<>% text_modify(sw, T)
+test.data$paragraph %<>% text_modify(sw, T)
+test.data$question %<>% text_modify(sw, T)
+```
+
+Запишем данные для обработки их в Python:
+```{r, eval=FALSE, include=FALSE}
+readr::write_csv(train.data, 'data/train_task1.csv')
+readr::write_csv(test.data, 'data/test_task1.csv')
+```
+
+#### Feature
+Добавим фичи как поиск подстроки вопроса в параграфе, от 1 до 5 слов в группе:
+```{r}
+subst <- function(paragraph_, question_, n = 2, ret = 'bool') {
+  stopifnot(ret %in% c('bool', 'int', 'sum'))
+  stopifnot(n %in% 1:5)
+  if (n == 1) {
+    q.split <- str_split(question_, ' ')[[1]]
+    p.split <- str_split(paragraph_, ' ')[[1]]
+    
+  }
+  if (n == 2) {
+    q.split <- str_split(question_, ' ')[[1]]
+    q.split <- paste(q.split, lead(q.split)) 
+    p.split <- str_split(paragraph_, ' ')[[1]]
+    p.split <- paste(p.split, lead(p.split)) 
+  }
+  if (n == 3) {
+    q.split <- str_split(question_, ' ')[[1]]
+    q.split <- paste(q.split, lead(q.split), lead(q.split, 2)) 
+    p.split <- str_split(paragraph_, ' ')[[1]]
+    p.split <- paste(p.split, lead(p.split), lead(p.split, 2)) 
+  }
+  if (n == 4) {
+    q.split <- str_split(question_, ' ')[[1]]
+    q.split <- paste(q.split, lead(q.split), lead(q.split, 2), lead(q.split, 3)) 
+    p.split <- str_split(paragraph_, ' ')[[1]]
+    p.split <- paste(p.split, lead(p.split), lead(p.split, 2), lead(p.split, 3)) 
+  }
+  if (n == 5) {
+    q.split <- str_split(question_, ' ')[[1]]
+    q.split <- paste(q.split, lead(q.split), lead(q.split, 2), lead(q.split, 3), lead(q.split, 4)) 
+    p.split <- str_split(paragraph_, ' ')[[1]]
+    p.split <- paste(p.split, lead(p.split), lead(p.split, 2), lead(p.split, 3), lead(p.split, 4)) 
+  }
+  
+  if (ret == 'bool') return(any(q.split %in% p.split))
+  if (ret == 'sum') return(sum(q.split %in% p.split))
+  if (ret == 'int') return(as.integer(any(q.split %in% p.split)))
+}
+
+# количество слов в параграфе и вопросе
+train.data %<>% 
+  mutate(par_words = sapply(str_split(paragraph, ' '), length))
+train.data %<>% 
+  mutate(que_words = sapply(str_split(question, ' '), length))
+test.data %<>% 
+  mutate(par_words = sapply(str_split(paragraph, ' '), length))
+test.data %<>% 
+  mutate(que_words = sapply(str_split(question, ' '), length))
+
+# количество пересекающихся слов
+train.data$inter_words <- train.data %>% 
+  select(paragraph, question) %>% 
+  apply(1, function(x){
+    subst(x[1], x[2], 1, 'sum')
+  })
+test.data$inter_words <- test.data %>% 
+  select(paragraph, question) %>% 
+  apply(1, function(x){
+    subst(x[1], x[2], 1, 'sum')
+  })
+
+# пересекающиеся пары слов
+train.data$inter2 <- train.data %>% 
+  select(paragraph, question) %>% 
+  apply(1, function(x){
+    subst(x[1], x[2], 2, 'bool')
+  })
+test.data$inter2 <- test.data %>% 
+  select(paragraph, question) %>% 
+  apply(1, function(x){
+    subst(x[1], x[2], 2, 'bool')
+  })
+
+# пересекающиеся тройки слов
+train.data$inter3 <- train.data %>% 
+  select(paragraph, question) %>% 
+  apply(1, function(x){
+    subst(x[1], x[2], 3, 'bool')
+  })
+test.data$inter3 <- test.data %>% 
+  select(paragraph, question) %>% 
+  apply(1, function(x){
+    subst(x[1], x[2], 3, 'bool')
+  })
+
+# пересекающиеся четверки слов
+train.data$inter4 <- train.data %>% 
+  select(paragraph, question) %>% 
+  apply(1, function(x){
+    subst(x[1], x[2], 4, 'bool')
+  })
+test.data$inter4 <- test.data %>% 
+  select(paragraph, question) %>% 
+  apply(1, function(x){
+    subst(x[1], x[2], 4, 'bool')
+  })
+
+# пересекающиеся пятерки слов
+train.data$inter5 <- train.data %>% 
+  select(paragraph, question) %>% 
+  apply(1, function(x){
+    subst(x[1], x[2], 5, 'bool')
+  })
+test.data$inter5 <- test.data %>% 
+  select(paragraph, question) %>% 
+  apply(1, function(x){
+    subst(x[1], x[2], 5, 'bool')
+  })
+```
+
+Добавим как фичи расстояния и похожесть, подсчитанные разными методами:
+```{r, warning=FALSE}
+# train
+it.paragraph <- itoken(train.data$paragraph, progressbar = FALSE)
+it.question <- itoken(train.data$question, progressbar = FALSE)
+
+it <- itoken(c(train.data$paragraph, train.data$question), progressbar = FALSE)
+v <- create_vocabulary(it) %>% prune_vocabulary(doc_proportion_max = 0.1, term_count_min = 5)
+vectorizer <- vocab_vectorizer(v)
+
+dtm.paragraph <- create_dtm(it.paragraph, vectorizer)
+dtm.question <- create_dtm(it.question, vectorizer)
+
+train.data$jac_sim <- psim2(dtm.paragraph, dtm.question, method = 'jaccard', norm = 'none')
+train.data$cos_sim <- psim2(dtm.paragraph, dtm.question, method = 'cosine', norm = 'none')
+#train.data$jac_dist <- pdist2(dtm.paragraph, dtm.question, method = 'jaccard', norm = 'none')
+#train.data$cos_dist <- pdist2(dtm.paragraph, dtm.question, method = 'cosine', norm = 'none')
+
+tfidf <- TfIdf$new()
+dtm.tfidf.par <- fit_transform(dtm.paragraph, tfidf)
+tfidf <- TfIdf$new()
+dtm.tfidf.que <- fit_transform(dtm.question, tfidf)
+train.data$tfidf_sim <- psim2(dtm.tfidf.par, dtm.tfidf.que, method = 'cosine', norm = 'none')
+
+lsa <- LSA$new(n_topics = 100)
+dtm.tfidf.par.lsa <- fit_transform(dtm.tfidf.par, lsa)
+lsa <- LSA$new(n_topics = 100)
+dtm.tfidf.que.lsa <- fit_transform(dtm.tfidf.que, lsa)
+train.data$tfidf_lsa_sim <- psim2(dtm.tfidf.par.lsa, dtm.tfidf.que.lsa, method = 'cosine', norm = 'none')
+
+# test
+it.paragraph <- itoken(test.data$paragraph, progressbar = FALSE)
+it.question <- itoken(test.data$question, progressbar = FALSE)
+
+it <- itoken(c(test.data$paragraph, test.data$question), progressbar = FALSE)
+v <- create_vocabulary(it) %>% prune_vocabulary(doc_proportion_max = 0.1, term_count_min = 5)
+vectorizer <- vocab_vectorizer(v)
+
+dtm.paragraph <- create_dtm(it.paragraph, vectorizer)
+dtm.question <- create_dtm(it.question, vectorizer)
+
+test.data$jac_sim <- psim2(dtm.paragraph, dtm.question, method = 'jaccard', norm = 'none')
+test.data$cos_sim <- psim2(dtm.paragraph, dtm.question, method = 'cosine', norm = 'none')
+#test.data$jac_dist <- pdist2(dtm.paragraph, dtm.question, method = 'jaccard', norm = 'none')
+#test.data$cos_dist <- pdist2(dtm.paragraph, dtm.question, method = 'cosine', norm = 'none')
+
+tfidf <- TfIdf$new()
+dtm.tfidf.par <- fit_transform(dtm.paragraph, tfidf)
+tfidf <- TfIdf$new()
+dtm.tfidf.que <- fit_transform(dtm.question, tfidf)
+test.data$tfidf_sim <- psim2(dtm.tfidf.par, dtm.tfidf.que, method = 'cosine', norm = 'none')
+
+lsa <- LSA$new(n_topics = 100)
+dtm.tfidf.par.lsa <- fit_transform(dtm.tfidf.par, lsa)
+lsa <- LSA$new(n_topics = 100)
+dtm.tfidf.que.lsa <- fit_transform(dtm.tfidf.que, lsa)
+test.data$tfidf_lsa_sim <- psim2(dtm.tfidf.par.lsa, dtm.tfidf.que.lsa, method = 'cosine', norm = 'none')
+```
+
+```{r, include=FALSE}
+rm(v, dtm.paragraph, dtm.question, it, it.paragraph, it.question, sw, sw.url, text_modify, vectorizer,
+   tfidf, dtm.tfidf.par, dtm.tfidf.que, lsa, dtm.tfidf.par.lsa, dtm.tfidf.que.lsa, subst)
+gc()
+```
+
+```{r, eval=FALSE, include=FALSE}
+readr::write_rds(train.data, 'data/train.rds')
+readr::write_rds(test.data, 'data/test.rds')
+```
+
+#### Model
+Подготовим данные для построения модели:
+```{r, message=FALSE}
+X <- train.data %>% 
+  select(-question_id, -paragraph, -question, -target)
+y <- train.data$target
+X_pred <- test.data %>% 
+  select(-question_id, -paragraph, -question)
+X$paragraph_id <- as.factor(X$paragraph_id)
+X_pred$paragraph_id <- as.factor(X_pred$paragraph_id)
+X <- ds_toSparseMatrix(X)
+X_pred <- ds_toSparseMatrix(X_pred)
+#dtrain <- lgb.Dataset(X, label = y, free_raw_data = FALSE)
+```
+
+Тюним xgboost:
+```{r, eval=FALSE, include=FALSE}
+yf = paste0('class_', y)
+yf = as.factor(yf)
+
+xgbGrid <- expand.grid(#
+  eta = 0.2,
+  nrounds = seq(30, 500, 50), #
+  max_depth = 4, #
+  colsample_bytree = 0.8, #
+  subsample = 0.8, #
+  min_child_weight = 1, #
+  gamma = 0 #
+)
+fitControl <- caret::trainControl(method = 'repeatedcv', 
+                                  repeats = 3,
+                                  number = 5,
+                                  classProbs = TRUE,
+                                  summaryFunction = caret::twoClassSummary,
+                                  verboseIter = TRUE)
+
+model <- caret::train(X, yf,
+            method = 'xgbTree',
+            trControl = fitControl,
+            tuneGrid = xgbGrid,
+            metric = 'auc')
+model$bestTune
+
+```
+
+Параметры модели xgboost:
+```{r}
+k <- 4 #
+param <- list(
+  eta = 0.2/k,
+  nround = 550*k,
+  max_depth = 5,
+  colsample_bytree = 1,
+  subsample = 1,
+  min_child_weight = 1,
+  gamma = 0,
+  #scale_pos_weight = 2.5,
+  tree_method = 'auto',
+  eval_metric = 'auc',
+  objective = 'binary:logistic'
+)
+```
+
+Кроссвалидация и построение модели xgboost:
+```{r}
+# cv.res <- xgb.cv(data = X, label = y, boosting = 'dart',
+#                  params = param, nrounds = param$nround, nfold = 5, verbose = 1L)
+
+model <- xgboost(
+  data = X,
+  label = y,
+  params = param,
+  boosting = 'dart',
+  nrounds = param$nround,
+  print_every_n = 100,
+  early_stopping_rounds = 100
+)
+```
+
+Предикт и запись в файл:
+```{r}
+sample.submsission$prediction <- predict(model, X_pred)
+readr::write_csv(sample.submsission, 'data/xgb.csv')
+```
+
+Параметры модели lightgbm:
+```{r}
+k <- 2
+param <- list(learning_rate = 0.2/k,
+              num_tree = 550*k, 
+              max_depth = 7, 
+              # num_leaves = 1024,
+              # max_bin = 256,
+              # lambda_l1 = 5,
+              # lambda_l2 = 0,
+              feature_fraction = 1, 
+              bagging_fraction = 1, 
+              bagging_freq = 6, 
+              #scale_pos_weight = 2.5, 
+              metric = 'auc',
+              objective = 'binary')
+```
+
+Кроссвалидация и построение модели lightgbm:
+```{r}
+# cv.res <- lgb.cv(dtrain,
+#                  boosting = 'dart',
+#                  params = param, num_tree = param$num_tree, early_stopping_rounds = 50,
+#                  nfold = 5, verbose = 1L)
+lgb.unloader(wipe = T)
+model <- lightgbm(data = X,
+                  label = y,
+                  params = param,
+                  boosting = 'dart',
+                  nrounds = param$num_tree,
+                  early_stopping_rounds = 50,
+                  verbose = 10L)
+```
+
+
+Предикт и запись в файл:
+```{r}
+sample.submsission$prediction <- predict(model, X_pred)
+readr::write_csv(sample.submsission, 'data/lgb.csv')
+```
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,17 @@
+base
+data.table
+tidyverse
+ggplot2
+tibble
+tidyr
+readr
+purrr
+dplyr
+magrittr
+stringr
+NLP
+tm
+text2vec
+bindrcpp
+dstools
+xgboost
