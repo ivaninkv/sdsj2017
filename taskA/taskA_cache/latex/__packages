@@ -1,10 +1,4 @@
 base
-methods
-datasets
-utils
-grDevices
-graphics
-stats
 dstools
 data.table
 tidyverse
@@ -21,3 +15,5 @@ tm
 text2vec
 xgboost
 bindrcpp
+R6
+lightgbm
