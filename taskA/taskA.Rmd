@@ -100,7 +100,7 @@ rm(group.train, group.test)
 ```{r}
 for.resample <- train.data %>% filter(paragraph_id > max(test.data$paragraph_id))
 train.data %<>% filter(paragraph_id <= max(test.data$paragraph_id))
-train.data %<>% rbind(train.data, train.data)
+#train.data %<>% rbind(train.data, train.data)
 #train.data %<>% rbind(train.data, train.data %>% filter(target == 1))
 ```
 
@@ -332,7 +332,7 @@ rm(v, dtm.paragraph, dtm.question, it, it.paragraph, it.question, sw, sw.url, te
 gc()
 ```
 
-```{r, eval=FALSE, include=FALSE}
+```{r, include=FALSE}
 readr::write_rds(train.data, 'data/train.rds')
 readr::write_rds(test.data, 'data/test.rds')
 ```

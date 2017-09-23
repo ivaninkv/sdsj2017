@@ -1,0 +1,281 @@
+---
+title: "Tuning LightGBM"
+author: "Konstantin Ivanin"
+date: '23 сентября 2017 г '
+output: html_document
+---
+
+
+```{r, include=FALSE}
+rm(list = ls())
+gc()
+```
+
+Загрузим необходимые библиотеки:
+```{r, message=FALSE, warning=FALSE}
+library(dstools)
+library(tidyverse)
+library(lightgbm)
+```
+
+Загрузим подготовленные данные:
+```{r, message=FALSE}
+train.data <- readr::read_rds('data/train.rds')
+test.data <- readr::read_rds('data/test.rds')
+sample.submsission <- readr::read_csv('data/sample_submission_a.csv')
+```
+
+Подготовим данные для построения модели:
+```{r, message=FALSE}
+X <- train.data %>% 
+  select(-question_id, -paragraph, -question, -target)
+y <- train.data$target
+X_pred <- test.data %>% 
+  select(-question_id, -paragraph, -question)
+X$paragraph_id <- as.factor(X$paragraph_id)
+X_pred$paragraph_id <- as.factor(X_pred$paragraph_id)
+X <- ds_toSparseMatrix(X)
+X_pred <- ds_toSparseMatrix(X_pred)
+```
+
+Напишем функцию для подбора параметров LightGBM:
+```{r}
+lgb_tuning <- function(X, y, param.grid){
+  lgb.unloader(wipe = T)
+  
+  dtrain <- lgb.Dataset(X, label = y, free_raw_data = FALSE)
+  len <- nrow(param.grid)
+  res <- c()
+  for (i in 1:len) {
+    print(paste('Проход', i, 'из', len))
+    param <- as.list(param.grid[i, ])
+    
+    cv.res <- lgb.cv(data = dtrain,
+                     #data = as.matrix(X), label = y,
+                     boosting = 'dart',
+                     params = param, nrounds = param$num_tree, early_stopping_rounds = 50,
+                     nfold = 5, verbose = -1, eval_freq = 100)
+    
+    res[i] <- cv.res$record_evals$valid$binary_logloss$eval[[length(cv.res$record_evals$valid$binary_logloss$eval)]]
+  }
+  print(min(res))
+return(as.list(param.grid[which.min(res), ]))
+}
+```
+
+Подберём eta и nrounds:
+```{r}
+grid.df <- expand.grid(learning_rate = 0.4,
+                       num_tree = seq(100, 700, 100), #0.07954771
+                       max_depth = 4,
+                       #num_leaves = 1024, #2^(5:10)
+                       #max_bin = 256, #2^(6:11) 
+                       lambda_l1 = 0, 
+                       lambda_l2 = 0, 
+                       feature_fraction = 0.8, 
+                       bagging_fraction = 0.8, 
+                       bagging_freq = 6, 
+                       scale_pos_weight = 2.5, 
+                       metric = 'binary_logloss',
+                       objective = 'binary',
+                       stringsAsFactors = F)
+best.param <- lgb_tuning(X, y, grid.df)
+```
+
+Подберём max_depth:
+```{r}
+grid.df <- expand.grid(learning_rate = 0.4,
+                       num_tree = 600, 
+                       max_depth = 3:8, #0.08041567
+                       #num_leaves = 1024, #2^(5:10)
+                       #max_bin = 256, #2^(6:11) 
+                       lambda_l1 = 0, 
+                       lambda_l2 = 0, 
+                       feature_fraction = 0.8, 
+                       bagging_fraction = 0.8, 
+                       bagging_freq = 6, 
+                       scale_pos_weight = 2.5, 
+                       metric = 'binary_logloss',
+                       objective = 'binary',
+                       stringsAsFactors = F)
+best.param <- lgb_tuning(X, y, grid.df)
+```
+
+Подберём feature_fraction:
+```{r}
+grid.df <- expand.grid(learning_rate = 0.4,
+                       num_tree = 600, 
+                       max_depth = 7,
+                       #num_leaves = 1024, #2^(5:10)
+                       #max_bin = 256, #2^(6:11) 
+                       lambda_l1 = 0, 
+                       lambda_l2 = 0, 
+                       feature_fraction = seq(0.3, 1.0, 0.1), #0.08112001
+                       bagging_fraction = 0.8, 
+                       bagging_freq = 6, 
+                       scale_pos_weight = 2.5, 
+                       metric = 'binary_logloss',
+                       objective = 'binary',
+                       stringsAsFactors = F)
+best.param <- lgb_tuning(X, y, grid.df)
+```
+
+Подберём bagging_fraction:
+```{r}
+grid.df <- expand.grid(learning_rate = 0.4,
+                       num_tree = 600, 
+                       max_depth = 7,
+                       #num_leaves = 1024, #2^(5:10)
+                       #max_bin = 256, #2^(6:11) 
+                       lambda_l1 = 0, 
+                       lambda_l2 = 0, 
+                       feature_fraction = 0.7, 
+                       bagging_fraction = seq(0.3, 1.0, 0.1), #0.07913938
+                       bagging_freq = 6, 
+                       scale_pos_weight = 2.5, 
+                       metric = 'binary_logloss',
+                       objective = 'binary',
+                       stringsAsFactors = F)
+best.param <- lgb_tuning(X, y, grid.df)
+```
+
+Подберём bagging_freq:
+```{r}
+grid.df <- expand.grid(learning_rate = 0.4,
+                       num_tree = 600, 
+                       max_depth = 7,
+                       #num_leaves = 1024, #2^(5:10)
+                       #max_bin = 256, #2^(6:11) 
+                       lambda_l1 = 0, 
+                       lambda_l2 = 0, 
+                       feature_fraction = 0.7, 
+                       bagging_fraction = 1,
+                       bagging_freq = seq(3, 15, 3), #0.07948183
+                       scale_pos_weight = 2.5, 
+                       metric = 'binary_logloss',
+                       objective = 'binary',
+                       stringsAsFactors = F)
+best.param <- lgb_tuning(X, y, grid.df)
+```
+
+Подберём num_leaves:
+```{r}
+grid.df <- expand.grid(learning_rate = 0.4,
+                       num_tree = 600, 
+                       max_depth = 7,
+                       num_leaves = 2^(7:12), #0.07986279
+                       #max_bin = 256, #2^(6:11) 
+                       lambda_l1 = 0, 
+                       lambda_l2 = 0, 
+                       feature_fraction = 0.7, 
+                       bagging_fraction = 1,
+                       bagging_freq = 6,
+                       scale_pos_weight = 2.5, 
+                       metric = 'binary_logloss',
+                       objective = 'binary',
+                       stringsAsFactors = F)
+best.param <- lgb_tuning(X, y, grid.df)
+```
+
+Подберём max_bin:
+```{r}
+grid.df <- expand.grid(learning_rate = 0.4,
+                       num_tree = 600, 
+                       max_depth = 7,
+                       num_leaves = 256, 
+                       max_bin = 2^(6:11), #0.0799464
+                       lambda_l1 = 0, 
+                       lambda_l2 = 0, 
+                       feature_fraction = 0.7, 
+                       bagging_fraction = 1,
+                       bagging_freq = 6,
+                       scale_pos_weight = 2.5, 
+                       metric = 'binary_logloss',
+                       objective = 'binary',
+                       stringsAsFactors = F)
+best.param <- lgb_tuning(X, y, grid.df)
+```
+
+Подберём lambda_l1:
+```{r}
+grid.df <- expand.grid(learning_rate = 0.4,
+                       num_tree = 600, 
+                       max_depth = 7,
+                       num_leaves = 256, 
+                       max_bin = 256, 
+                       lambda_l1 = seq(1, 20, 3), #0.08188651
+                       lambda_l2 = 0, 
+                       feature_fraction = 0.7, 
+                       bagging_fraction = 1,
+                       bagging_freq = 6,
+                       scale_pos_weight = 2.5, 
+                       metric = 'binary_logloss',
+                       objective = 'binary',
+                       stringsAsFactors = F)
+best.param <- lgb_tuning(X, y, grid.df)
+```
+
+Подберём lambda_l2:
+```{r}
+grid.df <- expand.grid(learning_rate = 0.4,
+                       num_tree = 600, 
+                       max_depth = 7,
+                       num_leaves = 256, 
+                       max_bin = 256, 
+                       lambda_l1 = 1, 
+                       lambda_l2 = seq(1, 20, 3), #0.08158001
+                       feature_fraction = 0.7, 
+                       bagging_fraction = 1,
+                       bagging_freq = 6,
+                       scale_pos_weight = 2.5, 
+                       metric = 'binary_logloss',
+                       objective = 'binary',
+                       stringsAsFactors = F)
+best.param <- lgb_tuning(X, y, grid.df)
+```
+
+Подберём scale_pos_weight:
+```{r}
+grid.df <- expand.grid(learning_rate = 0.4,
+                       num_tree = 600, 
+                       max_depth = 7,
+                       num_leaves = 256, 
+                       max_bin = 256, 
+                       lambda_l1 = 1, 
+                       lambda_l2 = 10, 
+                       feature_fraction = 0.7, 
+                       bagging_fraction = 1,
+                       bagging_freq = 6,
+                       scale_pos_weight = seq(1.5, 3.0, 0.2), #0.07862091
+                       metric = 'binary_logloss',
+                       objective = 'binary',
+                       stringsAsFactors = F)
+best.param <- lgb_tuning(X, y, grid.df)
+```
+
+Финальная модель:
+```{r}
+k <- 1
+param <- best.param
+param$learning_rate <- param$learning_rate / k
+param$num_tree <- param$num_tree * k
+
+lgb.unloader(wipe = T)
+model <- lightgbm(data = X,
+                  label = y,
+                  params = param,
+                  boosting = 'dart',
+                  nrounds = param$num_tree,
+                  early_stopping_rounds = 50,
+                  verbose = 1L)
+```
+
+Предикт и запись в файл:
+```{r}
+sample.submsission$prediction <- predict(model, X_pred)
+readr::write_csv(sample.submsission, 'data/lgb_tuned1.csv')
+```
+
+
+
+
