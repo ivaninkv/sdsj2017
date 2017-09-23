@@ -45,16 +45,10 @@ library(lightgbm)
 ```
 
 Считаем данные:
-```{r, message=FALSE}
+```{r, message=FALSE, echo=FALSE}
 train.data <- readr::read_csv('data/train_task1_latest.csv')
 test.data <- readr::read_csv('data/test_task1_latest.csv')
 sample.submsission <- readr::read_csv('data/sample_submission_a.csv')
-```
-
-Данные, предобработанные в Python:
-```{r, eval=FALSE, include=FALSE}
-train.data <- readr::read_csv('data/train.csv')
-test.data <- readr::read_csv('data/test.csv')
 ```
 
 Взглянем на данные, чтобы проверить как они загрузились:
@@ -167,11 +161,6 @@ test.data$paragraph %<>% text_modify(sw, T)
 test.data$question %<>% text_modify(sw, T)
 ```
 
-```{r, eval=FALSE, include=FALSE}
-# Запишем данные для обработки их в Python:
-readr::write_csv(train.data, 'data/train_task1.csv')
-readr::write_csv(test.data, 'data/test_task1.csv')
-```
 
 #### Feature
 Добавим фичи как поиск подстроки вопроса в параграфе, от 1 до 5 слов в группе:
@@ -350,7 +339,7 @@ rm(v, dtm.paragraph, dtm.question, it, it.paragraph, it.question, sw, sw.url, te
 gc()
 ```
 
-```{r, eval=TRUE, include=FALSE}
+```{r, eval=FALSE, include=FALSE}
 readr::write_rds(train.data, 'data/train.rds')
 readr::write_rds(test.data, 'data/test.rds')
 ```
@@ -370,8 +359,8 @@ X_pred <- ds_toSparseMatrix(X_pred)
 #dtrain <- lgb.Dataset(X, label = y, free_raw_data = FALSE)
 ```
 
-Тюним xgboost:
 ```{r, eval=FALSE, include=FALSE}
+# Тюним xgboost:
 yf = paste0('class_', y)
 yf = as.factor(yf)
 
@@ -419,7 +408,7 @@ param <- list(
 ```
 
 Кроссвалидация и построение модели xgboost:
-```{r}
+```{r, message=FALSE, warning=FALSE}
 # cv.res <- xgb.cv(data = X, label = y, boosting = 'dart',
 #                  params = param, nrounds = param$nround, nfold = 5, verbose = 1L)
 
@@ -459,7 +448,7 @@ param <- list(learning_rate = 0.2/k,
 ```
 
 Кроссвалидация и построение модели lightgbm:
-```{r}
+```{r, message=FALSE, warning=FALSE}
 # cv.res <- lgb.cv(dtrain,
 #                  boosting = 'dart',
 #                  params = param, num_tree = param$num_tree, early_stopping_rounds = 50,
