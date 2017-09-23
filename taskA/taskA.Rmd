@@ -3,8 +3,8 @@ title: "SDSJ 2017 taskA"
 author: "Konstantin Ivanin"
 date: "16 сентября 2017 г"
 output:
-  pdf_document: default
   html_document: default
+  pdf_document: default
 header-includes: \usepackage[T2A]{fontenc} \usepackage[utf8]{inputenc} \usepackage[russian]{babel}
 ---
 
@@ -125,22 +125,15 @@ text_modify <- function(txt_, sw_ = c(), stem_ = FALSE) {
   
   if (stem_ == TRUE) {
     # позже разобраться с кодировкой
-    # txt_ %<>%  enc2utf8() %>% 
-    #   system(command = 'mystem/mystem.exe -cl',
-    #          intern = TRUE,
-    #          ignore.stdout = FALSE,
-    #          ignore.stderr = FALSE,
-    #          wait = TRUE,
-    #          input = .,
-    #          show.output.on.console = TRUE,
-    #          minimized = FALSE,
-    #          invisible = TRUE) %>% 
-    #   str_replace_all('[{}]', '') %>%
-    #   str_replace_all('(\\|[^ ]+)', '') %>%
-    #   str_replace_all('\\?', '') %>%
-    #   str_replace_all('\\s+', ' ')
-    txt_ %<>%
-      stemDocument('russian')
+    txt_ %<>%  enc2utf8() %>%
+      system(command = './mystem/mystem -cl', intern = TRUE, input = .) %>%
+      str_replace_all('[{}]', '') %>%
+      str_replace_all('(\\|[^ ]+)', '') %>%
+      str_replace_all('\\?', '') %>%
+      str_replace_all('\\s+', ' ')
+    
+    # txt_ %<>%
+    #   stemDocument('russian')
   }
   
   return(txt_)
@@ -437,8 +430,8 @@ param <- list(learning_rate = 0.2/k,
               max_depth = 7, 
               num_leaves = 1024,
               max_bin = 256,
-              lambda_l1 = 21,
-              lambda_l2 = 21,
+              lambda_l1 = 0,
+              lambda_l2 = 5,
               feature_fraction = 1, 
               bagging_fraction = 1, 
               bagging_freq = 6, 
