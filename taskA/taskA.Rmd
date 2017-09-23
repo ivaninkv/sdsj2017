@@ -463,7 +463,6 @@ model <- lightgbm(data = X,
                   verbose = 1L)
 ```
 
-
 Предикт и запись в файл:
 ```{r}
 sample.submsission$prediction <- predict(model, X_pred)
