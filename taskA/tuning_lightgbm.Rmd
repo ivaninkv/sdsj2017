@@ -23,6 +23,7 @@ library(lightgbm)
 train.data <- readr::read_rds('data/train.rds')
 test.data <- readr::read_rds('data/test.rds')
 sample.submsission <- readr::read_csv('data/sample_submission_a.csv')
+train.data <- rbind(train.data, train.data)
 ```
 
 Подготовим данные для построения модели:
@@ -246,7 +247,7 @@ grid.df <- expand.grid(learning_rate = 0.4,
                        feature_fraction = 0.7, 
                        bagging_fraction = 1,
                        bagging_freq = 6,
-                       scale_pos_weight = seq(1.5, 3.0, 0.2), #0.07862091
+                       scale_pos_weight = seq(1.0, 2.0, 0.2), #0.07862091
                        metric = 'binary_logloss',
                        objective = 'binary',
                        stringsAsFactors = F)
@@ -255,7 +256,7 @@ best.param <- lgb_tuning(X, y, grid.df)
 
 Финальная модель:
 ```{r}
-k <- 1
+k <- 2
 param <- best.param
 param$learning_rate <- param$learning_rate / k
 param$num_tree <- param$num_tree * k
@@ -273,7 +274,7 @@ model <- lightgbm(data = X,
 Предикт и запись в файл:
 ```{r}
 sample.submsission$prediction <- predict(model, X_pred)
-readr::write_csv(sample.submsission, 'data/lgb_tuned1.csv')
+readr::write_csv(sample.submsission, 'data/lgb_tuned2.csv')
 ```
 
 
