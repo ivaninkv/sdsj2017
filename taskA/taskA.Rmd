@@ -31,7 +31,7 @@ header-includes: \usepackage[T2A]{fontenc} \usepackage[utf8]{inputenc} \usepacka
 
 
 #### EDA
-Загрузим необходимые бибилиотеки:
+Загрузим необходимые библиотеки:
 ```{r, message=FALSE}
 library(dstools)
 library(data.table)
