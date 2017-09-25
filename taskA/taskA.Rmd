@@ -292,12 +292,6 @@ vectorizer <- vocab_vectorizer(v)
 
 dtm.paragraph <- create_dtm(it.paragraph, vectorizer)
 dtm.question <- create_dtm(it.question, vectorizer)
-par.tbl <- as.tibble(as.matrix(dtm.paragraph))
-names(par.tbl) <- paste0('par_', names(par.tbl))
-que.tbl <- as.tibble(as.matrix(dtm.question))
-names(que.tbl) <- paste0('que_', names(que.tbl))
-train.mat <- cbind(par.tbl, que.tbl)
-rm(par.tbl, que.tbl)
 
 train.data$jac_sim <- psim2(dtm.paragraph, dtm.question, method = 'jaccard', norm = 'none')
 train.data$cos_sim <- psim2(dtm.paragraph, dtm.question, method = 'cosine', norm = 'none')
@@ -326,12 +320,6 @@ vectorizer <- vocab_vectorizer(v)
 
 dtm.paragraph <- create_dtm(it.paragraph, vectorizer)
 dtm.question <- create_dtm(it.question, vectorizer)
-par.tbl <- as.tibble(as.matrix(dtm.paragraph))
-names(par.tbl) <- paste0('par_', names(par.tbl))
-que.tbl <- as.tibble(as.matrix(dtm.question))
-names(que.tbl) <- paste0('que_', names(que.tbl))
-test.mat <- cbind(par.tbl, que.tbl)
-rm(par.tbl, que.tbl)
 
 test.data$jac_sim <- psim2(dtm.paragraph, dtm.question, method = 'jaccard', norm = 'none')
 test.data$cos_sim <- psim2(dtm.paragraph, dtm.question, method = 'cosine', norm = 'none')
@@ -352,15 +340,13 @@ test.data$tfidf_sim <- psim2(dtm.tfidf.par, dtm.tfidf.que, method = 'cosine', no
 ```
 
 ```{r, include=FALSE}
-readr::write_rds(train.data, 'data/train.rds')
-readr::write_rds(test.data, 'data/test.rds')
-readr::write_rds(train.mat, 'data/train_mat.rds')
-readr::write_rds(test.mat, 'data/test_mat.rds')
+readr::write_rds(train.data, 'data/train.rds', compress = 'gz')
+readr::write_rds(test.data, 'data/test.rds', compress = 'gz')
 ```
 
 ```{r, include=FALSE}
 rm(v, dtm.paragraph, dtm.question, it, it.paragraph, it.question, sw, sw.url, text_modify, vectorizer,
-   tfidf, dtm.tfidf.par, dtm.tfidf.que, lsa, dtm.tfidf.par.lsa, dtm.tfidf.que.lsa, subst, train.mat, test.mat)
+   tfidf, dtm.tfidf.par, dtm.tfidf.que, lsa, dtm.tfidf.par.lsa, dtm.tfidf.que.lsa, subst)
 gc()
 ```
 
