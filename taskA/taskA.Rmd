@@ -274,11 +274,17 @@ it.paragraph <- itoken(train.data$paragraph, progressbar = FALSE)
 it.question <- itoken(train.data$question, progressbar = FALSE)
 
 it <- itoken(c(train.data$paragraph, train.data$question), progressbar = FALSE)
-v <- create_vocabulary(it) %>% prune_vocabulary(doc_proportion_max = 0.1, term_count_min = 5)
+v <- create_vocabulary(it) %>% prune_vocabulary(doc_proportion_max = 0.7, doc_proportion_min = 0.01, term_count_min = 5)
 vectorizer <- vocab_vectorizer(v)
 
 dtm.paragraph <- create_dtm(it.paragraph, vectorizer)
 dtm.question <- create_dtm(it.question, vectorizer)
+par.tbl <- as.tibble(as.matrix(dtm.paragraph))
+names(par.tbl) <- paste0('par_', names(par.tbl))
+que.tbl <- as.tibble(as.matrix(dtm.question))
+names(que.tbl) <- paste0('que_', names(que.tbl))
+train.mat <- cbind(par.tbl, que.tbl)
+rm(par.tbl, que.tbl)
 
 train.data$jac_sim <- psim2(dtm.paragraph, dtm.question, method = 'jaccard', norm = 'none')
 train.data$cos_sim <- psim2(dtm.paragraph, dtm.question, method = 'cosine', norm = 'none')
@@ -302,11 +308,17 @@ it.paragraph <- itoken(test.data$paragraph, progressbar = FALSE)
 it.question <- itoken(test.data$question, progressbar = FALSE)
 
 it <- itoken(c(test.data$paragraph, test.data$question), progressbar = FALSE)
-v <- create_vocabulary(it) %>% prune_vocabulary(doc_proportion_max = 0.1, term_count_min = 5)
+v <- create_vocabulary(it) %>% prune_vocabulary(doc_proportion_max = 0.7, doc_proportion_min = 0.01, term_count_min = 5)
 vectorizer <- vocab_vectorizer(v)
 
 dtm.paragraph <- create_dtm(it.paragraph, vectorizer)
 dtm.question <- create_dtm(it.question, vectorizer)
+par.tbl <- as.tibble(as.matrix(dtm.paragraph))
+names(par.tbl) <- paste0('par_', names(par.tbl))
+que.tbl <- as.tibble(as.matrix(dtm.question))
+names(que.tbl) <- paste0('que_', names(que.tbl))
+test.mat <- cbind(par.tbl, que.tbl)
+rm(par.tbl, que.tbl)
 
 test.data$jac_sim <- psim2(dtm.paragraph, dtm.question, method = 'jaccard', norm = 'none')
 test.data$cos_sim <- psim2(dtm.paragraph, dtm.question, method = 'cosine', norm = 'none')
@@ -327,14 +339,16 @@ test.data$tfidf_sim <- psim2(dtm.tfidf.par, dtm.tfidf.que, method = 'cosine', no
 ```
 
 ```{r, include=FALSE}
-rm(v, dtm.paragraph, dtm.question, it, it.paragraph, it.question, sw, sw.url, text_modify, vectorizer,
-   tfidf, dtm.tfidf.par, dtm.tfidf.que, lsa, dtm.tfidf.par.lsa, dtm.tfidf.que.lsa, subst)
-gc()
+readr::write_rds(train.data, 'data/train.rds')
+readr::write_rds(test.data, 'data/test.rds')
+readr::write_rds(train.mat, 'data/train_mat.rds')
+readr::write_rds(test.mat, 'data/test_mat.rds')
 ```
 
 ```{r, include=FALSE}
-readr::write_rds(train.data, 'data/train.rds')
-readr::write_rds(test.data, 'data/test.rds')
+rm(v, dtm.paragraph, dtm.question, it, it.paragraph, it.question, sw, sw.url, text_modify, vectorizer,
+   tfidf, dtm.tfidf.par, dtm.tfidf.que, lsa, dtm.tfidf.par.lsa, dtm.tfidf.que.lsa, subst, train.mat, test.mat)
+gc()
 ```
 
 #### Model

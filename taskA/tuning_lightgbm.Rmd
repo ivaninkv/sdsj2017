@@ -22,8 +22,16 @@ library(lightgbm)
 ```{r, message=FALSE}
 train.data <- readr::read_rds('data/train.rds')
 test.data <- readr::read_rds('data/test.rds')
+train.mat <- readr::read_rds('data/train_mat.rds')
+test.mat <- readr::read_rds('data/test_mat.rds')
 sample.submsission <- readr::read_csv('data/sample_submission_a.csv')
-train.data <- rbind(train.data, train.data)
+#train.data <- rbind(train.data, train.data)
+```
+
+Сбиндим с BOW
+```{r}
+train.data <- cbind(train.data, train.mat)
+test.data <- cbind(test.data, test.mat)
 ```
 
 Подготовим данные для построения модели:
@@ -256,7 +264,7 @@ best.param <- lgb_tuning(X, y, grid.df)
 
 Финальная модель:
 ```{r}
-k <- 2
+k <- 1
 param <- best.param
 param$learning_rate <- param$learning_rate / k
 param$num_tree <- param$num_tree * k
@@ -274,7 +282,7 @@ model <- lightgbm(data = X,
 Предикт и запись в файл:
 ```{r}
 sample.submsission$prediction <- predict(model, X_pred)
-readr::write_csv(sample.submsission, 'data/lgb_tuned2.csv')
+readr::write_csv(sample.submsission, 'data/lgb_tuned1.csv')
 ```
 
 

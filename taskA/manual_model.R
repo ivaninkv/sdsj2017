@@ -8,7 +8,8 @@ library(lightgbm)
 train.data <- readr::read_rds('data/train.rds')
 test.data <- readr::read_rds('data/test.rds')
 sample.submsission <- readr::read_csv('data/sample_submission_a.csv')
-train.data$target <- paste0('p', train.data$target)
+train.mat <- readr::read_rds('data/train_mat.rds')
+test.mat <- readr::read_rds('data/test_mat.rds')
 
 X <- train.data %>% 
   select(-question_id, -paragraph, -question)
