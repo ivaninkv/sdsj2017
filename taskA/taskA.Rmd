@@ -42,6 +42,7 @@ library(tm)
 library(text2vec)
 library(xgboost)
 library(lightgbm)
+library(stringdist)
 ```
 
 Считаем данные:
@@ -267,6 +268,18 @@ test.data$inter5 <- test.data %>%
   })
 ```
 
+Пакет `stringdist`:
+```{r}
+train.data %<>% 
+  mutate(osa_dist = stringdist(paragraph, question))
+train.data %<>% 
+  mutate(qgr_sim = stringsim(paragraph, question, method = 'qgram'))
+test.data %<>% 
+  mutate(osa_dist = stringdist(paragraph, question))
+test.data %<>% 
+  mutate(qgr_sim = stringsim(paragraph, question, method = 'qgram'))
+```
+
 Добавим как фичи расстояния и похожесть, подсчитанные разными методами:
 ```{r, warning=FALSE}
 # train
@@ -274,7 +287,7 @@ it.paragraph <- itoken(train.data$paragraph, progressbar = FALSE)
 it.question <- itoken(train.data$question, progressbar = FALSE)
 
 it <- itoken(c(train.data$paragraph, train.data$question), progressbar = FALSE)
-v <- create_vocabulary(it) %>% prune_vocabulary(doc_proportion_max = 0.7, doc_proportion_min = 0.01, term_count_min = 5)
+v <- create_vocabulary(it) %>% prune_vocabulary(doc_proportion_max = 0.1, term_count_min = 5)
 vectorizer <- vocab_vectorizer(v)
 
 dtm.paragraph <- create_dtm(it.paragraph, vectorizer)
@@ -308,7 +321,7 @@ it.paragraph <- itoken(test.data$paragraph, progressbar = FALSE)
 it.question <- itoken(test.data$question, progressbar = FALSE)
 
 it <- itoken(c(test.data$paragraph, test.data$question), progressbar = FALSE)
-v <- create_vocabulary(it) %>% prune_vocabulary(doc_proportion_max = 0.7, doc_proportion_min = 0.01, term_count_min = 5)
+v <- create_vocabulary(it) %>% prune_vocabulary(doc_proportion_max = 0.1, term_count_min = 5)
 vectorizer <- vocab_vectorizer(v)
 
 dtm.paragraph <- create_dtm(it.paragraph, vectorizer)
