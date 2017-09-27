@@ -100,7 +100,7 @@ rm(group.train, group.test)
 Оставим в трейне только те параграфы, что есть в тесте:
 ```{r}
 #for.resample <- train.data %>% filter(paragraph_id > max(test.data$paragraph_id))
-#train.data %<>% filter(paragraph_id <= max(test.data$paragraph_id))
+train.data %<>% filter(paragraph_id <= max(test.data$paragraph_id))
 #train.data %<>% rbind(train.data, train.data)
 #train.data %<>% rbind(train.data, train.data %>% filter(target == 1))
 ```
@@ -222,11 +222,11 @@ test.data$inter_words <- test.data %>%
 # отношения пересекающихся слов
 train.data %<>%
   mutate(par_ratio = inter_words / par_words,
-         que_ratio = inter_words / que_words,
+         #que_ratio = inter_words / que_words,
          all_ratio = inter_words / ((par_words + que_words) / 2))
 test.data %<>%
   mutate(par_ratio = inter_words / par_words,
-         que_ratio = inter_words / que_words,
+         #que_ratio = inter_words / que_words,
          all_ratio = inter_words / ((par_words + que_words) / 2))
 
 # пересекающиеся пары слов
