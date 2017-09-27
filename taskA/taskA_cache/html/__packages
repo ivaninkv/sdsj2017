@@ -17,3 +17,4 @@ dstools
 xgboost
 R6
 lightgbm
+stringdist

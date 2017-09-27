@@ -78,17 +78,17 @@ ggplot() +
 
 Добавим столбцы с длиной вопроса и параграфа и посмотрим, как их отношение влияет на `target`:
 ```{r}
-train.data %<>%
-  mutate(par_len = nchar(paragraph), 
-         ques_len = nchar(question),
-         len_ratio = ques_len / par_len)
-test.data %<>%
-  mutate(par_len = nchar(paragraph), 
-         ques_len = nchar(question),
-         len_ratio = ques_len / par_len)
-train.data %>% 
-  group_by(target) %>% 
-  summarise(mean_ratio = mean(len_ratio))
+# train.data %<>%
+#   mutate(par_len = nchar(paragraph), 
+#          ques_len = nchar(question),
+#          len_ratio = ques_len / par_len)
+# test.data %<>%
+#   mutate(par_len = nchar(paragraph), 
+#          ques_len = nchar(question),
+#          len_ratio = ques_len / par_len)
+# train.data %>% 
+#   group_by(target) %>% 
+#   summarise(mean_ratio = mean(len_ratio))
 ```
 
 ```{r, message=FALSE, warning=FALSE, include=FALSE}
@@ -99,8 +99,8 @@ rm(group.train, group.test)
 #### Text
 Оставим в трейне только те параграфы, что есть в тесте:
 ```{r}
-for.resample <- train.data %>% filter(paragraph_id > max(test.data$paragraph_id))
-train.data %<>% filter(paragraph_id <= max(test.data$paragraph_id))
+#for.resample <- train.data %>% filter(paragraph_id > max(test.data$paragraph_id))
+#train.data %<>% filter(paragraph_id <= max(test.data$paragraph_id))
 #train.data %<>% rbind(train.data, train.data)
 #train.data %<>% rbind(train.data, train.data %>% filter(target == 1))
 ```
@@ -127,7 +127,7 @@ text_modify <- function(txt_, sw_ = c(), stem_ = FALSE) {
   if (stem_ == TRUE) {
     # позже разобраться с кодировкой
     txt_ %<>%  enc2utf8() %>%
-      system(command = './mystem/mystem -cl', intern = TRUE, input = .) %>%
+      system(command = '/bin/mystem -cl', intern = TRUE, input = .) %>%
       str_replace_all('[{}]', '') %>%
       str_replace_all('(\\|[^ ]+)', '') %>%
       str_replace_all('\\?', '') %>%
@@ -198,14 +198,15 @@ subst <- function(paragraph_, question_, n = 2, ret = 'bool') {
 }
 
 # количество слов в параграфе и вопросе
-train.data %<>% 
-  mutate(par_words = sapply(str_split(paragraph, ' '), length))
-train.data %<>% 
-  mutate(que_words = sapply(str_split(question, ' '), length))
-test.data %<>% 
-  mutate(par_words = sapply(str_split(paragraph, ' '), length))
-test.data %<>% 
-  mutate(que_words = sapply(str_split(question, ' '), length))
+train.data %<>%
+  mutate(par_words = sapply(str_split(paragraph, ' '), length), 
+         que_words = sapply(str_split(question, ' '), length),
+         ratio = que_words / par_words)
+test.data %<>%
+  mutate(par_words = sapply(str_split(paragraph, ' '), length), 
+         que_words = sapply(str_split(question, ' '), length),
+         ratio = que_words / par_words)
+
 
 # количество пересекающихся слов
 train.data$inter_words <- train.data %>% 
@@ -218,78 +219,85 @@ test.data$inter_words <- test.data %>%
   apply(1, function(x){
     subst(x[1], x[2], 1, 'sum')
   })
+# отношения пересекающихся слов
+train.data %<>%
+  mutate(par_ratio = inter_words / par_words,
+         que_ratio = inter_words / que_words,
+         all_ratio = inter_words / ((par_words + que_words) / 2))
+test.data %<>%
+  mutate(par_ratio = inter_words / par_words,
+         que_ratio = inter_words / que_words,
+         all_ratio = inter_words / ((par_words + que_words) / 2))
 
 # пересекающиеся пары слов
 train.data$inter2 <- train.data %>% 
   select(paragraph, question) %>% 
   apply(1, function(x){
-    subst(x[1], x[2], 2, 'bool')
+    subst(x[1], x[2], 2, 'sum')
   })
 test.data$inter2 <- test.data %>% 
   select(paragraph, question) %>% 
   apply(1, function(x){
-    subst(x[1], x[2], 2, 'bool')
+    subst(x[1], x[2], 2, 'sum')
   })
 
 # пересекающиеся тройки слов
 train.data$inter3 <- train.data %>% 
   select(paragraph, question) %>% 
   apply(1, function(x){
-    subst(x[1], x[2], 3, 'bool')
+    subst(x[1], x[2], 3, 'sum')
   })
 test.data$inter3 <- test.data %>% 
   select(paragraph, question) %>% 
   apply(1, function(x){
-    subst(x[1], x[2], 3, 'bool')
+    subst(x[1], x[2], 3, 'sum')
   })
 
 # пересекающиеся четверки слов
 train.data$inter4 <- train.data %>% 
   select(paragraph, question) %>% 
   apply(1, function(x){
-    subst(x[1], x[2], 4, 'bool')
+    subst(x[1], x[2], 4, 'sum')
   })
 test.data$inter4 <- test.data %>% 
   select(paragraph, question) %>% 
   apply(1, function(x){
-    subst(x[1], x[2], 4, 'bool')
+    subst(x[1], x[2], 4, 'sum')
   })
 
 # пересекающиеся пятерки слов
 train.data$inter5 <- train.data %>% 
   select(paragraph, question) %>% 
   apply(1, function(x){
-    subst(x[1], x[2], 5, 'bool')
+    subst(x[1], x[2], 5, 'sum')
   })
 test.data$inter5 <- test.data %>% 
   select(paragraph, question) %>% 
   apply(1, function(x){
-    subst(x[1], x[2], 5, 'bool')
+    subst(x[1], x[2], 5, 'sum')
   })
 ```
 
 Пакет `stringdist`:
 ```{r}
 train.data %<>% 
-  mutate(osa_dist = stringdist(paragraph, question))
-train.data %<>% 
-  mutate(qgr_sim = stringsim(paragraph, question, method = 'qgram'))
+  mutate(cos_dist = stringdist(paragraph, question, method = 'cosine'),
+         lv_sim = stringsim(paragraph, question, method = 'lv'))
 test.data %<>% 
-  mutate(osa_dist = stringdist(paragraph, question))
-test.data %<>% 
-  mutate(qgr_sim = stringsim(paragraph, question, method = 'qgram'))
+  mutate(cos_dist = stringdist(paragraph, question, method = 'cosine'),
+         lv_sim = stringsim(paragraph, question, method = 'lv'))
 ```
 
 #### Model
 Подготовим данные для построения модели:
 ```{r, message=FALSE}
 X <- train.data %>% 
-  select(-question_id, -paragraph, -question, -target)
+  select(-question_id, -paragraph, -question, -target, -paragraph_id)
 y <- train.data$target
 X_pred <- test.data %>% 
-  select(-question_id, -paragraph, -question)
-X$paragraph_id <- as.factor(X$paragraph_id)
-X_pred$paragraph_id <- as.factor(X_pred$paragraph_id)
+  select(-question_id, -paragraph, -question, -paragraph_id)
+#X$paragraph_id <- as.factor(X$paragraph_id)
+#X_pred$paragraph_id <- as.factor(X_pred$paragraph_id)
 X <- ds_toSparseMatrix(X)
 X_pred <- ds_toSparseMatrix(X_pred)
 #dtrain <- lgb.Dataset(X, label = y, free_raw_data = FALSE)
@@ -327,7 +335,7 @@ model$bestTune
 
 Параметры модели xgboost:
 ```{r}
-k <- 4 #
+k <- 1 #
 param <- list(
   eta = 0.2/k,
   nround = 550*k,
@@ -363,11 +371,14 @@ model <- xgboost(
 ```{r}
 sample.submsission$prediction <- predict(model, X_pred)
 readr::write_csv(sample.submsission, 'data/xgb.csv')
+
+f_imp <- xgb.importance(feature_names = colnames(X), model = model)
+xgb.plot.importance(f_imp[Gain > 0.005])
 ```
 
 Параметры модели lightgbm:
 ```{r, message=FALSE, warning=FALSE}
-k <- 2
+k <- 1
 param <- list(learning_rate = 0.2/k,
               num_tree = 550*k, 
               max_depth = 7, 
