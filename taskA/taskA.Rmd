@@ -100,7 +100,7 @@ rm(group.train, group.test)
 Оставим в трейне только те параграфы, что есть в тесте:
 ```{r}
 #for.resample <- train.data %>% filter(paragraph_id > max(test.data$paragraph_id))
-train.data %<>% filter(paragraph_id <= max(test.data$paragraph_id))
+#train.data %<>% filter(paragraph_id <= max(test.data$paragraph_id))
 #train.data %<>% rbind(train.data, train.data)
 #train.data %<>% rbind(train.data, train.data %>% filter(target == 1))
 ```
@@ -154,6 +154,44 @@ train.data$question %<>% text_modify(sw, T)
 test.data$paragraph %<>% text_modify(sw, T)
 test.data$question %<>% text_modify(sw, T)
 ```
+
+Сохраним промежуточный результат
+```{r}
+readr::write_rds(train.data, 'data/train.rds', compress = 'gz')
+readr::write_rds(test.data, 'data/test.rds', compress = 'gz')
+```
+
+Загрузим промежуточный результат
+```{r}
+train.data <- readr::read_rds('data/train.rds')
+test.data <- readr::read_rds('data/test.rds')
+```
+
+Поиграем с полными данными
+```{r}
+all.data <- union_all(train.data, test.data)
+
+inter_words <- function(text1, text2) {
+  res <- paste(intersect(str_split(text1, ' ', simplify = T), 
+                         str_split(text2, ' ', simplify = T)), collapse = ' ')
+  return(res)
+}
+
+all.data$inter_words <- all.data %>% 
+  select(paragraph, question) %>% 
+  apply(1, function(x){
+    inter_words(x[1], x[2])
+  })
+
+it.inter_worsd <- itoken(all.data$inter_words, progressbar = FALSE)
+it <- itoken(c(all.data$paragraph, all.data$question), progressbar = FALSE)
+v <- create_vocabulary(it) %>% prune_vocabulary(doc_proportion_max = 0.3, term_count_min = 5)
+vectorizer <- vocab_vectorizer(v)
+dtm.inter_words <- create_dtm(it.inter_worsd, vectorizer)
+
+```
+
+
 
 
 #### Feature
@@ -222,11 +260,11 @@ test.data$inter_words <- test.data %>%
 # отношения пересекающихся слов
 train.data %<>%
   mutate(par_ratio = inter_words / par_words,
-         #que_ratio = inter_words / que_words,
+         que_ratio = inter_words / que_words,
          all_ratio = inter_words / ((par_words + que_words) / 2))
 test.data %<>%
   mutate(par_ratio = inter_words / par_words,
-         #que_ratio = inter_words / que_words,
+         que_ratio = inter_words / que_words,
          all_ratio = inter_words / ((par_words + que_words) / 2))
 
 # пересекающиеся пары слов
@@ -281,11 +319,11 @@ test.data$inter5 <- test.data %>%
 Пакет `stringdist`:
 ```{r}
 train.data %<>% 
-  mutate(cos_dist = stringdist(paragraph, question, method = 'cosine'),
-         lv_sim = stringsim(paragraph, question, method = 'lv'))
+  mutate(cos_sim = stringsim(paragraph, question, method = 'cosine'),
+         lv_dist = stringdist(paragraph, question, method = 'lv'))
 test.data %<>% 
-  mutate(cos_dist = stringdist(paragraph, question, method = 'cosine'),
-         lv_sim = stringsim(paragraph, question, method = 'lv'))
+  mutate(cos_sim = stringsim(paragraph, question, method = 'cosine'),
+         lv_dist = stringdist(paragraph, question, method = 'lv'))
 ```
 
 #### Model
