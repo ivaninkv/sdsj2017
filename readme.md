@@ -40,6 +40,7 @@
 
 [Материалы соревнования](https://github.com/sberbank-ai/data-science-journey-2017 "GitHub")
 
+[Моё решение](taskA/taskA.html)
 
 ## Задача B: построение вопрос-ответной системы
 

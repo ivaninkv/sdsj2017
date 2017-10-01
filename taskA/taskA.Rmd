@@ -437,7 +437,7 @@ readr::write_csv(sample.submsission, 'data/xgb.csv')
 
 Параметры модели lightgbm:
 ```{r, message=FALSE, warning=FALSE}
-k <- 2
+k <- 1
 param <- list(learning_rate = 0.2/k,
               num_tree = 550*k, 
               max_depth = 7, 
@@ -466,7 +466,7 @@ model <- lightgbm(data = X,
                   boosting = 'dart',
                   nrounds = param$num_tree,
                   early_stopping_rounds = 50,
-                  verbose = 1L)
+                  verbose = 0L)
 ```
 
 Предикт и запись в файл:
