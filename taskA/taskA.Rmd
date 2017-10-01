@@ -448,7 +448,7 @@ param <- list(learning_rate = 0.2/k,
               feature_fraction = 1, 
               bagging_fraction = 1, 
               bagging_freq = 6, 
-              scale_pos_weight = 2.5, 
+              scale_pos_weight = 2.5,
               metric = 'auc',
               objective = 'binary')
 ```
@@ -465,8 +465,8 @@ model <- lightgbm(data = X,
                   params = param,
                   boosting = 'dart',
                   nrounds = param$num_tree,
-                  early_stopping_rounds = 50,
-                  verbose = 0L)
+                  #early_stopping_rounds = 50,
+                  verbose = -1)
 ```
 
 Предикт и запись в файл:
